@@ -6,7 +6,6 @@ class Renderer:
         pygame.init()
 
         self.graph = graph
-
         self.width = 1920
         self.height = 1080
         self.screen = pygame.display.set_mode(

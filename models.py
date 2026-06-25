@@ -22,6 +22,7 @@ class Area:
         self.role = role
         self.color = color
         self.max_drones = max_drones
+        self.reserved: dict[int, int] = {}
         
         self.connections: list['Connection'] = []
         self.current_drones: list['Drone'] = []
@@ -35,6 +36,14 @@ class Area:
     @property
     def is_blocked(self) -> bool:
         return self.area_type == AreaType.BLOCKED
+    
+    @property
+    def is_priority(self) -> bool:
+        return self.area_type == AreaType.PRIORITY
+    
+    @property
+    def is_restricted(self) -> bool:
+        return self.area_type == AreaType.RESTRICTED
     
     @property
     def is_end(self):
@@ -57,26 +66,10 @@ class Drone:
         self.next_area: Area | None = None
         self.on_connection: Connection | None = None
         start.current_drones.append(self)
-        
-    def set_path(self, path: list['Area']) -> None:
-        self.path = path
-        self.path_index = 0
-        self.current_area = path[0]
-        self.finished = False
     
     def step(self) -> None:
-        if self.finished or not self.path:
-            return
-        if self.path_index >= len(self.path) - 1:
-            self.finished = True
-            return
-        next_area = self.path[self.path_index + 1]
-        if not next_area.is_end and len(next_area.current_drones) >= next_area.max_drones:
-            return
-        self.current_area.current_drones.remove(self)
-        self.path_index += 1
-        self.current_area = next_area
-        next_area.current_drones.append(self)
+        pass
+            
 
 class Connection:
     def __init__(self,
@@ -88,18 +81,23 @@ class Connection:
         self.max_drones = max_drones
         
         self.current_drones: list['Drone'] = []
+        self.reserved: dict[int, int] = {}
         
     def get_dest(self, area: Area) -> Area:
-        return self.area2 if area == self.area1 else self.area1
+        if area == self.area1:
+            return self.area2
+        return None
     
     def cost_to(self, destination: Area) -> int:
         return destination.movement_cost
 
 class Graph:
     def __init__(self) -> None:
+        from pathfinder import Pathfinder
         self.areas: dict[str, Area] = {}
         self.connections: list[Connection] = []
         self.drones: list[Drone] = []
+        self.pathfinder = Pathfinder()
         
     def add_area(self, area: Area) -> None:
         self.areas[area.area_id] = area
@@ -124,8 +122,45 @@ class Graph:
         
     def step(self) -> None:
         for drone in self.drones:
-            drone.step()
-    
+            if drone.finished:
+                continue
+            if drone.in_transit:
+                drone.remaining_turns -= 1
+                if drone.remaining_turns <= 0:
+                    if drone.on_connection:
+                        drone.on_connection.current_drones.remove(drone)
+                    drone.in_transit = False
+                    drone.current_area = drone.next_area
+                    if drone.current_area.is_end:
+                        drone.finished = True
+                    drone.current_area.current_drones.append(drone)
+                    drone.next_area = None
+                    drone.on_connection = None
+            else:
+                path = self.pathfinder.find_path(
+                    self,
+                    drone.current_area,
+                    self.get_end_area()
+                )
+                if len(path) < 2:
+                    continue
+                next_area = path[1]
+                connection = None
+                for c in drone.current_area.connections:
+                    if c.get_dest(drone.current_area) == next_area:
+                        connection = c
+                        break
+                if connection is None:
+                    continue
+                if len(connection.current_drones) >= connection.max_drones:
+                    continue
+                drone.current_area.current_drones.remove(drone)
+                connection.current_drones.append(drone)
+                drone.in_transit = True
+                drone.next_area = next_area
+                drone.on_connection = connection
+                drone.remaining_turns = connection.cost_to(next_area)
+                        
     @classmethod
     def from_settings(cls, settings: MapSetting, nb_drones: int) -> 'Graph':
         graph = cls()

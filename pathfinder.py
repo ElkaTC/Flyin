@@ -1,39 +1,49 @@
-from models import Graph, Area
+from models import Area
 
 class Pathfinder:
     def find_path(self,
-                  graph: Graph,
+                  graph,
                   start: Area,
                   end: Area) -> list[Area]:
-        distances = {}
+        arrival_time = {}
         previous = {}
         for area in graph.areas.values():
-            distances[area] = float("inf")
+            arrival_time[area] = float("inf")
             previous[area] = None
-        distances[start] = 0
+        arrival_time[start] = 0
         unvisited = list(graph.areas.values())
         while unvisited:
-            current = min(unvisited, key=lambda area: distances[area])
+            current = min(
+                unvisited,
+                key=lambda area: arrival_time[area]
+            )
             unvisited.remove(current)
             if current == end:
                 break
-            for neighbor in graph.get_neighbors(current):
+            if arrival_time[current] == float("inf"):
+                break
+            for connection in current.connections:
+                neighbor = connection.get_dest(current)
+                if neighbor is None:
+                    continue
                 if neighbor.is_blocked:
                     continue
-                new_distance = distances[current] + neighbor.movement_cost
-                if new_distance < distances[neighbor]:
-                    distances[neighbor] = new_distance
+                travel_time = connection.cost_to(neighbor)
+                new_arrival =  arrival_time[current] + travel_time
+                if (not neighbor.is_end
+                    and neighbor.reservations.get(new_arrival, 0)
+                    >= neighbor.max_drones):
+                    continue
+                if new_arrival < arrival_time[neighbor]:
+                    arrival_time[neighbor] = new_arrival
                     previous[neighbor] = current
-        path = []
+        if arrival_time[end] == float("inf"):
+            return[]
         current = end
+        path = []
         while current is not None:
             path.append(current)
             current = previous[current]
         path.reverse()
+        print("PATH:", [area.area_id for area in path])
         return path
-                
-        
-        # for area, distance in distances.items():
-        #     print(area.area_id, distance)
-
-        # return []
