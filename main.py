@@ -13,7 +13,10 @@ if __name__ == "__main__":
         start = graph.get_start_area()
         end = graph.get_end_area()
         pathfinder = Pathfinder()
-        path = pathfinder.find_path(graph, start, end)
+        for drone in graph.drones:
+            path, timetable = pathfinder.find_path(graph, start, end)
+            drone.path = path[1:]
+            drone.timetable = timetable
         renderer.run()
     except ParseError as e:
         print(e)

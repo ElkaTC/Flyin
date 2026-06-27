@@ -52,20 +52,17 @@ class Area:
 class Drone:
     def __init__(self,
                  drone_id: int,
-                 start: Area) -> None:
+                 start: Area,
+                 end: Area) -> None:
         self.drone_id = drone_id
         self.current_area = start
-        
-        self.path: list['Area'] = []
-        self.path_index: int = 0
-        self.finished: bool = False
-        self.target_area: Area | None = None
-        
-        self.in_transit = False
-        self.remaining_turns = 0
-        self.next_area: Area | None = None
-        self.on_connection: Connection | None = None
-        start.current_drones.append(self)
+        self.end = end
+        self.current_connection = None
+        self.target_area = None
+        self.travel_progress = 0
+        self.is_arrived = False
+        self.path = []
+        self.timetable = {}
     
     def step(self) -> None:
         pass
@@ -98,6 +95,7 @@ class Graph:
         self.connections: list[Connection] = []
         self.drones: list[Drone] = []
         self.pathfinder = Pathfinder()
+        self.current_time = 0
         
     def add_area(self, area: Area) -> None:
         self.areas[area.area_id] = area
@@ -127,45 +125,28 @@ class Graph:
         return None
         
     def step(self) -> None:
+        self.current_time += 1
         for drone in self.drones:
-            if drone.finished:
+            if drone.is_arrived:
                 continue
-            if drone.in_transit:
-                drone.remaining_turns -= 1
-                if drone.remaining_turns <= 0:
-                    if drone.on_connection:
-                        drone.on_connection.current_drones.remove(drone)
-                    drone.in_transit = False
-                    drone.current_area = drone.next_area
-                    if drone.current_area.is_end:
-                        drone.finished = True
-                    drone.current_area.current_drones.append(drone)
-                    drone.next_area = None
-                    drone.on_connection = None
-            else:
-                path = self.pathfinder.find_path(
-                    self,
-                    drone.current_area,
-                    self.get_end_area()
-                )
-                if len(path) < 2:
-                    continue
-                next_area = path[1]
-                connection = None
-                for c in drone.current_area.connections:
-                    if c.get_dest(drone.current_area) == next_area:
-                        connection = c
-                        break
-                if connection is None:
-                    continue
-                if len(connection.current_drones) >= connection.max_drones:
-                    continue
-                drone.current_area.current_drones.remove(drone)
-                connection.current_drones.append(drone)
-                drone.in_transit = True
-                drone.next_area = next_area
-                drone.on_connection = connection
-                drone.remaining_turns = connection.cost_to(next_area)
+            if drone.current_connection:
+                drone.travel_progress += 1
+                if drone.travel_progress >= drone.current_connection.cost_to(drone.target_area):
+                    drone.current_area = drone.target_area
+                    drone.current_connection = None
+                    drone.travel_progress = 0
+                    if drone.current_area == drone.end:
+                        drone.is_arrived = True
+            elif drone.path:
+                next_area = drone.path[0]
+                connection = self.get_connection(drone.current_area, next_area)
+                planned_departure = drone.timetable.get(drone.current_area, 0)
+                if self.current_time >= planned_departure:
+                    drone.current_connection = connection
+                    drone.target_area = next_area
+                    drone.travel_progress = 0
+                    drone.path.pop(0)
+                    drone.current_area = None
                         
     @classmethod
     def from_settings(cls, settings: MapSetting, nb_drones: int) -> 'Graph':
@@ -190,8 +171,9 @@ class Graph:
             graph.add_connection(link)
 
         start_area = graph.get_start_area()
+        end_area = graph.get_end_area()
         for i in range(1, nb_drones + 1):
-            drone = Drone(f'D{i}', start_area)
+            drone = Drone(f'D{i}', start_area, end_area)
             graph.drones.append(drone)
             start_area.current_drones.append(drone)
         
