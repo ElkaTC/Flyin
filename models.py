@@ -119,6 +119,12 @@ class Graph:
         for area in self.areas.values():
             if area.role == "end_hub":
                 return area
+    
+    def get_connection(self, area1: Area, area2: Area):
+        for connection in area1.connections:
+            if connection.get_dest(area1) == area2:
+                return connection
+        return None
         
     def step(self) -> None:
         for drone in self.drones:
