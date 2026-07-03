@@ -63,9 +63,6 @@ class Drone:
         self.is_arrived = False
         self.path = []
         self.timetable = {}
-    
-    def step(self) -> None:
-        pass
             
 
 class Connection:
@@ -95,7 +92,8 @@ class Graph:
         self.connections: list[Connection] = []
         self.drones: list[Drone] = []
         self.pathfinder = Pathfinder()
-        self.current_time = 0
+        self.current_time = -1
+        self.i = 0
         
     def add_area(self, area: Area) -> None:
         self.areas[area.area_id] = area
@@ -131,7 +129,8 @@ class Graph:
                 continue
             if drone.current_connection:
                 drone.travel_progress += 1
-                if drone.travel_progress >= drone.current_connection.cost_to(drone.target_area):
+                cost = drone.current_connection.cost_to(drone.target_area)
+                if drone.travel_progress >= cost:
                     drone.current_area = drone.target_area
                     drone.current_connection = None
                     drone.travel_progress = 0
@@ -147,6 +146,8 @@ class Graph:
                     drone.travel_progress = 0
                     drone.path.pop(0)
                     drone.current_area = None
+        
+            
                         
     @classmethod
     def from_settings(cls, settings: MapSetting, nb_drones: int) -> 'Graph':

@@ -15,12 +15,12 @@ class AreaSetting(BaseModel):
     "restricted",
     "priority"
     ] = "normal"
-    MAX_DRONE: Optional[int] = Field(default=1, gt=0)
+    MAX_DRONE: int = Field(default=1, gt=0)
     
 class ConnectSetting(BaseModel):
     SOURCE: str
     TARGET: str
-    MAX_LINK: Optional[int] = Field(default=1, gt=0)
+    MAX_LINK: int = Field(default=1, gt=0)
 
 class MapSetting(BaseModel):
     NB_DRONE: int = Field(gt=0)

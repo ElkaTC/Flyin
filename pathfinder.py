@@ -74,5 +74,4 @@ class Pathfinder:
             if not b.is_end:
                 b.reserved[arrival] = b.reserved.get(arrival, 0) + 1
             time = arrival
-        print("PATH:", [a.area_id for a in path])
         return path, timetable
