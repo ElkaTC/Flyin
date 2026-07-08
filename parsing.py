@@ -119,7 +119,7 @@ class MapParser:
                 raise ParseError("Optional setting must be unique")
             for name_opt, value_opt in options:
                 if name_opt == 'color':
-                    area.COLOR = value_opt
+                    area.COLOR = value_opt.upper()
                 elif name_opt == 'zone':
                     area.TYPE = value_opt
                 elif name_opt == 'max_drones':

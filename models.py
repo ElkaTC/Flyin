@@ -6,6 +6,26 @@ class AreaType(Enum):
     RESTRICTED = "restricted"
     BLOCKED = "blocked"
     PRIORITY = "priority"
+    
+class Color(Enum):
+    WHITE = (240, 240, 240)
+    BLUE = (50, 150, 220)
+    YELLOW = (240, 200, 60)
+    CYAN = (50, 180, 185)
+    LIME = (100, 210, 100)
+    MAGENTA = (210, 80, 150)
+    GREEN = (40, 165, 95)
+    RED = (220, 70, 70)
+    PURPLE = (130, 90, 170)
+    BLACK = (30, 30, 30)
+    BROWN = (155, 105, 75)
+    ORANGE = (230, 125, 50)
+    MAROON = (150, 60, 60)
+    GOLD = (215, 175, 50)
+    DARKRED = (160, 45, 45)
+    CRIMSON = (195, 50, 80)
+    VIOLET = (170, 125, 210)
+    RAINBOW = (0, 0, 0)
 
 
 class Area:
@@ -93,7 +113,7 @@ class Graph:
         self.drones: list[Drone] = []
         self.pathfinder = Pathfinder()
         self.current_time = -1
-        self.i = 0
+        self.turn = 0
         
     def add_area(self, area: Area) -> None:
         self.areas[area.area_id] = area
@@ -121,22 +141,18 @@ class Graph:
             if connection.get_dest(area1) == area2:
                 return connection
         return None
+    
+    def is_finished(self) -> bool:
+        return all(len(drone.path) == 0 for drone in self.drones)
         
     def step(self) -> None:
         self.current_time += 1
+        if not self.is_finished():
+            self.turn += 1
         for drone in self.drones:
             if drone.is_arrived:
                 continue
-            if drone.current_connection:
-                drone.travel_progress += 1
-                cost = drone.current_connection.cost_to(drone.target_area)
-                if drone.travel_progress >= cost:
-                    drone.current_area = drone.target_area
-                    drone.current_connection = None
-                    drone.travel_progress = 0
-                    if drone.current_area == drone.end:
-                        drone.is_arrived = True
-            elif drone.path:
+            if not drone.current_connection and drone.path:
                 next_area = drone.path[0]
                 connection = self.get_connection(drone.current_area, next_area)
                 planned_departure = drone.timetable.get(drone.current_area, 0)
@@ -146,6 +162,15 @@ class Graph:
                     drone.travel_progress = 0
                     drone.path.pop(0)
                     drone.current_area = None
+            if drone.current_connection:
+                drone.travel_progress += 1
+                cost = drone.current_connection.cost_to(drone.target_area)
+                if drone.travel_progress >= cost:
+                    drone.current_area = drone.target_area
+                    drone.current_connection = None
+                    drone.travel_progress = 0
+                    if drone.current_area == drone.end:
+                        drone.is_arrived = True
         
             
                         
@@ -177,5 +202,4 @@ class Graph:
             drone = Drone(f'D{i}', start_area, end_area)
             graph.drones.append(drone)
             start_area.current_drones.append(drone)
-        
         return graph

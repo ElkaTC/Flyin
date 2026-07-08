@@ -2,7 +2,7 @@ import pygame
 import os
 from parsing import MapParser, ParseError
 from pathfinder import Pathfinder
-from models import Graph
+from models import Graph, Color
 
 class Menu:
     def __init__(self, screen: pygame.Surface) -> None:
@@ -33,13 +33,13 @@ class Menu:
 
     def draw(self) -> None:
         title = self.font.render("Choose a map", True, (255, 255, 255))
-        self.screen.blit(title, (660, 40))
+        self.screen.blit(title, (700, 30))
         start_y  = 220
         spacing = 60
         for i, name in enumerate(self.maps):
             color = (0, 0, 0)
             if i == self.selected:
-                color = (200, 100, 0)
+                color = (220, 100, 0)
             display_name = self.map_name(name)
             text = self.font2.render(display_name, True, color)
             self.screen.blit(text, (120, start_y + i * spacing))
@@ -69,8 +69,13 @@ class Renderer:
         self.wallpaper = pygame.transform.scale(
             self.wallpaper,
             (self.width, self.height))
+        self.wallpaper_menu = pygame.image.load('graphics/wallpaper_menu.png').convert()
+        self.wallpaper_menu = pygame.transform.scale(
+            self.wallpaper_menu,
+            (self.width, self.height))
         self.drone_sprite = pygame.image.load('graphics/drone.png').convert_alpha()
-        self.drone_sprite = pygame.transform.scale(self.drone_sprite, (116, 116))
+        self.drone_sprite = pygame.transform.scale(self.drone_sprite, (111, 111))
+        self.stats_font = pygame.font.Font('graphics/Kids_Word.otf', 20)
         self.running = True
         self.drone_visual_positions = {}
         
@@ -80,6 +85,7 @@ class Renderer:
         step_interval = 400
         self.game_started = False
         self.game_keyboard = None
+        self.turn = 0
         while self.running:
             now = pygame.time.get_ticks()
             for event in pygame.event.get():
@@ -88,11 +94,22 @@ class Renderer:
                 if self.state == 'GAME':
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
-                            self.game_started = True
+                            if self.game_started == False:
+                                self.game_started = True
+                            else:
+                                self.game_started = False
                             last_step_time = pygame.time.get_ticks()
-                        elif event.key == pygame.K_RIGHT:
+                        elif event.key == pygame.K_RIGHT and not self.game_started:
                             self.graph.step()
+                            if not self.graph.is_finished():
+                                self.turn += 1
                             last_step_time = now
+                        elif event.key == pygame.K_LEFT and not self.game_started:
+                            self.state = 'MENU'
+                        elif event.key == pygame.K_ESCAPE:
+                            self.state = 'MENU'
+                            self.game_started = False
+                            self.menu.chosen_map = None
                 if self.state == 'MENU':
                     self.menu.handle_event(event)
                     if self.menu.chosen_map:
@@ -114,17 +131,29 @@ class Renderer:
                         except ParseError as e:
                             print(e)
                             self.running = False
-            self.screen.blit(self.wallpaper, (0, 0))
             if self.state == 'GAME':
                 if self.game_started:
                     if now - last_step_time >= step_interval:
                         self.graph.step()
                         last_step_time = now
+                        self.turn += 1
+                        if self.graph.is_finished():
+                            self.game_started = False
                     else:
                         pass
             if self.state == 'MENU':
+                self.screen.blit(self.wallpaper_menu, (0, 0))
                 self.menu.draw()
             elif self.state == 'GAME':
+                self.screen.blit(self.wallpaper, (0, 0))
+                text_turn = self.menu.font.render(f"Turn : {self.graph.turn}", True, (255, 255, 255))
+                self.screen.blit(text_turn, (1550, 30))
+                if self.game_started:
+                    state = 'Auto'
+                else:
+                    state = 'Manual'
+                text = self.menu.font.render(f"Mode : {state}", True, (255, 255, 255))
+                self.screen.blit(text, (700, 30))
                 self.draw_connections()
                 self.draw_areas()
                 self.draw_drones()
@@ -136,8 +165,34 @@ class Renderer:
         offset_x, offset_y = self.get_offset()
         for area in self.graph.areas.values():
             x = area.pos[0] * 75 + offset_x
-            y = area.pos[1] * 75 + offset_y
-            pygame.draw.circle(self.screen, (255, 255, 255), (x, y), 25)
+            y = area.pos[1] * 120 + offset_y
+            if area.color == 'none':
+                if area.role == 'start_hub':
+                    draw_color = Color.GREEN
+                elif area.role == 'end_hub':
+                    draw_color = Color.RED
+                else:
+                    draw_color = Color.WHITE
+            else:
+                draw_color = Color[area.color]  
+            if area.color == 'RAINBOW':
+                pygame.draw.circle(self.screen, Color.PURPLE.value, (x, y), 30)
+                pygame.draw.circle(self.screen, Color.BLUE.value, (x, y), 26)
+                pygame.draw.circle(self.screen, Color.GREEN.value, (x, y), 22)
+                pygame.draw.circle(self.screen, Color.LIME.value, (x, y), 18)
+                pygame.draw.circle(self.screen, Color.YELLOW.value, (x, y), 14)
+                pygame.draw.circle(self.screen, Color.ORANGE.value, (x, y), 10)
+                
+            else:
+                pygame.draw.circle(self.screen, draw_color.value, (x, y), 30)
+                pygame.draw.circle(self.screen, Color.WHITE.value, (x, y), 23)
+            nb_drones = sum(1 for drone in self.graph.drones if drone.current_area == area and drone.current_connection is None)
+            cap_text = f'{nb_drones}/{area.max_drones}'
+            text_surface = self.stats_font.render(cap_text, True, (0, 0, 0))
+            text_rect = text_surface.get_rect(center=(x, y + 50))
+            fond_rect = text_rect.inflate(8, 4)
+            pygame.draw.rect(self.screen, Color.WHITE.value, fond_rect)
+            self.screen.blit(text_surface, text_rect)
         
     def draw_connections(self) -> None:
         offset_x, offset_y = self.get_offset()
@@ -146,13 +201,13 @@ class Renderer:
             x2, y2 = connection.area2.pos
             pygame.draw.line(
                 self.screen,
-                (0, 128, 0),
-                (x1 * 75 + offset_x, y1 * 75 + offset_y),
-                (x2 * 75 + offset_x, y2 * 75 + offset_y),
-                3
+                (0, 100, 0),
+                (x1 * 75 + offset_x, y1 * 120 + offset_y),
+                (x2 * 75 + offset_x, y2 * 120 + offset_y),
+                4
             )
             
-    def draw_drones(self):
+    def draw_drones(self) -> None:
         offset_x, offset_y = self.get_offset()
         for drone in self.graph.drones:
             if drone.current_connection:
@@ -168,7 +223,7 @@ class Renderer:
                 current_area = drone.current_area if drone.current_area else drone.final_destination
                 raw_x, raw_y = current_area.pos if current_area else (0, 0)
             target_x = raw_x * 75 + offset_x
-            target_y = raw_y * 75 + offset_y
+            target_y = raw_y * 120 + offset_y
             if drone not in self.drone_visual_positions:
                 self.drone_visual_positions[drone] = [target_x, target_y]
             current_vis_x, current_vis_y = self.drone_visual_positions[drone]
