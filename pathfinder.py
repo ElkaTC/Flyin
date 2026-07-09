@@ -1,77 +1,94 @@
 import heapq
 
 class Pathfinder:
+    HORIZON = 200
+
     def find_path(self, graph, start, end):
-        arrival_time = {(start, 0): 0}
+        # Time-expanded Dijkstra in simulation time.
+        # A state is (area, arrival) where `arrival` is the simulation turn at
+        # which the drone becomes present on `area`. A drone occupies an area
+        # from its arrival turn until the turn it departs (exclusive), so the
+        # whole stay -- not just the arrival instant -- must fit under the
+        # area capacity. Earliest a drone can leave an area is arrival + 1
+        # (it cannot depart on the same turn it lands), and crossing an edge of
+        # cost c leaving at turn D lands on the neighbor at turn D + c - 1.
+        start_state = (start, 0)
+        best = {start_state: 0}
         previous = {}
         counter = 0
-        queue = [(0, counter, start)]
+        queue = [(0, counter, start_state)]
         visited = set()
-        final_time = None
+        final_state = None
         while queue:
-            current_time, _, current_area = heapq.heappop(queue)
-            if current_area == end:
-                final_time = current_time
+            _, _, state = heapq.heappop(queue)
+            area, arrival = state
+            if area is end:
+                final_state = state
                 break
-            if (current_area, current_time) in visited:
+            if state in visited:
                 continue
-            visited.add((current_area, current_time))
-            for connection in current_area.connections:
-                neighbor = connection.get_dest(current_area)
-                if neighbor is None or neighbor.is_blocked:
-                    continue
-                travel = connection.cost_to(neighbor)
-                for wait_time in range(100): 
-                    departure = current_time + wait_time
-                    arrival = departure + travel
-                    blocked = False
-                    for t in range(departure, arrival):
-                        if connection.reserved.get(t, 0) >= connection.max_drones:
-                            blocked = True
-                            break
-                    if not blocked and not neighbor.is_end:
-                        if neighbor.reserved.get(arrival, 0) >= neighbor.max_drones:
-                            blocked = True
-                    if not blocked:
-                        neighbor_state = (neighbor, arrival)
-                        if neighbor_state not in arrival_time or arrival < arrival_time[neighbor_state]:
-                            arrival_time[neighbor_state] = arrival
-                            previous[neighbor_state] = (current_area, current_time)
-                            counter += 1
-                            heapq.heappush(queue, (arrival, counter, neighbor))
-                        break
-        if final_time is None:
-            return []
-        path = []
-        current_state = (end, final_time)
-        while current_state is not None:
-            path.append(current_state[0])
-            current_state = previous.get(current_state)
-        path.reverse()
-        time = 0
-        timetable = {}
-        for i in range(len(path) - 1):
-            a = path[i]
-            b = path[i + 1]
-            connection = graph.get_connection(a, b)
-            travel = connection.cost_to(b)
-            while True:
-                blocked = False
-                for t in range(time, time + travel):
-                    if connection.reserved.get(t, 0) >= connection.max_drones:
-                        blocked = True
-                        break
-                if not blocked and not b.is_end:
-                    if b.reserved.get(time + travel, 0) >= b.max_drones:
-                        blocked = True
-                if not blocked:
+            visited.add(state)
+            for departure in range(arrival + 1, arrival + 1 + self.HORIZON):
+                # Staying until `departure` means occupying `area` through turn
+                # departure - 1. If that turn is already full the drone cannot
+                # remain that long, and neither can it wait any longer.
+                if not self._area_free(area, departure - 1):
                     break
-                time += 1
-            timetable[a] = time
-            for t in range(time, time + travel):
-                connection.reserved[t] = connection.reserved.get(t, 0) + 1
-            arrival = time + travel
-            if not b.is_end:
-                b.reserved[arrival] = b.reserved.get(arrival, 0) + 1
-            time = arrival
+                for connection in area.connections:
+                    neighbor = connection.get_dest(area)
+                    if neighbor is None or neighbor.is_blocked:
+                        continue
+                    cost = connection.cost_to(neighbor)
+                    if not self._connection_free(connection, departure, cost):
+                        continue
+                    n_arrival = departure + cost - 1
+                    if not self._area_free(neighbor, n_arrival):
+                        continue
+                    n_state = (neighbor, n_arrival)
+                    if n_state not in best or n_arrival < best[n_state]:
+                        best[n_state] = n_arrival
+                        previous[n_state] = (state, departure, connection)
+                        counter += 1
+                        heapq.heappush(queue, (n_arrival, counter, n_state))
+        if final_state is None:
+            return []
+        states = []
+        state = final_state
+        while state is not None:
+            states.append(state)
+            record = previous.get(state)
+            state = record[0] if record else None
+        states.reverse()
+
+        path = [area for area, _ in states]
+        timetable = {}
+        for i in range(len(states) - 1):
+            area, arrival = states[i]
+            _, departure, connection = previous[states[i + 1]]
+            cost = connection.cost_to(states[i + 1][0])
+            timetable[area] = departure
+            self._reserve_area(area, arrival, departure)
+            self._reserve_connection(connection, departure, cost)
         return path, timetable
+
+    def _area_free(self, area, turn) -> bool:
+        # Start and end hubs are staging/sink areas and are not capacity-limited.
+        if area.is_end or area.role == 'start_hub':
+            return True
+        return area.reserved.get(turn, 0) < area.max_drones
+
+    def _connection_free(self, connection, departure, cost) -> bool:
+        for turn in range(departure, departure + cost):
+            if connection.reserved.get(turn, 0) >= connection.max_drones:
+                return False
+        return True
+
+    def _reserve_area(self, area, arrival, departure) -> None:
+        if area.is_end or area.role == 'start_hub':
+            return
+        for turn in range(arrival, departure):
+            area.reserved[turn] = area.reserved.get(turn, 0) + 1
+
+    def _reserve_connection(self, connection, departure, cost) -> None:
+        for turn in range(departure, departure + cost):
+            connection.reserved[turn] = connection.reserved.get(turn, 0) + 1

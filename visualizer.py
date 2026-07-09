@@ -127,7 +127,7 @@ class Renderer:
                                     raise ParseError("No path finded")
                                 drone.path = path[1:]
                                 drone.timetable = timetable
-                            self.state = 'GAME'
+                            self.state = 'GAME'    
                         except ParseError as e:
                             print(e)
                             self.running = False
@@ -187,7 +187,10 @@ class Renderer:
                 pygame.draw.circle(self.screen, draw_color.value, (x, y), 30)
                 pygame.draw.circle(self.screen, Color.WHITE.value, (x, y), 23)
             nb_drones = sum(1 for drone in self.graph.drones if drone.current_area == area and drone.current_connection is None)
-            cap_text = f'{nb_drones}/{area.max_drones}'
+            if area.role == 'hub':
+                cap_text = f'{nb_drones}/{area.max_drones}'
+            else:
+                cap_text = f'{nb_drones}/{len(self.graph.drones)}'
             text_surface = self.stats_font.render(cap_text, True, (0, 0, 0))
             text_rect = text_surface.get_rect(center=(x, y + 50))
             fond_rect = text_rect.inflate(8, 4)

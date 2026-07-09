@@ -112,7 +112,7 @@ class Graph:
         self.connections: list[Connection] = []
         self.drones: list[Drone] = []
         self.pathfinder = Pathfinder()
-        self.current_time = -1
+        self.current_time = 0
         self.turn = 0
         
     def add_area(self, area: Area) -> None:
