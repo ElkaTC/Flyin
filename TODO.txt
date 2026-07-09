@@ -1,0 +1,5 @@
+- Makefile a peaufiner
+- README
+- Clean Project
+- Docstring
+- Testing

@@ -4,14 +4,6 @@ class Pathfinder:
     HORIZON = 200
 
     def find_path(self, graph, start, end):
-        # Time-expanded Dijkstra in simulation time.
-        # A state is (area, arrival) where `arrival` is the simulation turn at
-        # which the drone becomes present on `area`. A drone occupies an area
-        # from its arrival turn until the turn it departs (exclusive), so the
-        # whole stay -- not just the arrival instant -- must fit under the
-        # area capacity. Earliest a drone can leave an area is arrival + 1
-        # (it cannot depart on the same turn it lands), and crossing an edge of
-        # cost c leaving at turn D lands on the neighbor at turn D + c - 1.
         start_state = (start, 0)
         best = {start_state: 0}
         previous = {}
@@ -29,9 +21,6 @@ class Pathfinder:
                 continue
             visited.add(state)
             for departure in range(arrival + 1, arrival + 1 + self.HORIZON):
-                # Staying until `departure` means occupying `area` through turn
-                # departure - 1. If that turn is already full the drone cannot
-                # remain that long, and neither can it wait any longer.
                 if not self._area_free(area, departure - 1):
                     break
                 for connection in area.connections:
@@ -72,7 +61,6 @@ class Pathfinder:
         return path, timetable
 
     def _area_free(self, area, turn) -> bool:
-        # Start and end hubs are staging/sink areas and are not capacity-limited.
         if area.is_end or area.role == 'start_hub':
             return True
         return area.reserved.get(turn, 0) < area.max_drones
