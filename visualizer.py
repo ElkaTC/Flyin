@@ -1,10 +1,10 @@
 import pygame
 import os
-from parsing import MapParser, ParseError
-from pathfinder import Pathfinder
-from models import Graph, Color
+from models import Color
+from simulator import Simulator
 
 class Menu:
+    """Handles the map selection menu, including file discovery and user input."""
     def __init__(self, screen: pygame.Surface) -> None:
         self.screen = screen
         self.font = pygame.font.Font('graphics/colinoosh.otf', 50)
@@ -22,6 +22,7 @@ class Menu:
         self.chosen_map = None
         
     def map_name(self, map_path: str) -> str:
+        """Formats the raw map file path into a clean, human-readable display string."""
         category, name = os.path.split(map_path)
         clean_name, _ = os.path.splitext(name)
         clean_name = clean_name.replace('_', ' ').title()
@@ -32,9 +33,10 @@ class Menu:
         return f'{category} {clean_name}'
 
     def draw(self) -> None:
+        """Renders the menu interface and map list onto the screen."""
         title = self.font.render("Choose a map", True, (255, 255, 255))
         self.screen.blit(title, (700, 30))
-        start_y  = 220
+        start_y = 220
         spacing = 60
         for i, name in enumerate(self.maps):
             color = (0, 0, 0)
@@ -45,6 +47,7 @@ class Menu:
             self.screen.blit(text, (120, start_y + i * spacing))
             
     def handle_event(self, event: pygame.event.Event) -> None:
+        """Processes keyboard navigation events for the menu."""
         if event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_UP, pygame.K_z):
                 self.selected = (self.selected - 1) % len(self.maps)
@@ -53,128 +56,118 @@ class Menu:
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.chosen_map = os.path.join("maps", self.maps[self.selected])
 
+
 class Renderer:
-    def __init__(self) -> None:
+    """Manages the Pygame window context, graphics rendering, and the main game loop."""
+    def __init__(self, default_map: str = None) -> None:
         pygame.init()
         self.width = 1920
         self.height = 1080
-        self.screen = pygame.display.set_mode(
-            (self.width, self.height)
-        )
+        self.screen = pygame.display.set_mode((self.width, self.height))
         pygame.display.set_caption("Flyin")
+        
         self.state = 'MENU'
         self.menu = Menu(self.screen)
-        self.graph = None
+        self.simulator = Simulator()
+        
+        if default_map:
+            success = self.simulator.load_map(default_map)
+            if success:
+                self.state = 'GAME'
+                self.menu.chosen_map = default_map  # Optionnel, pour garder la référence
+            else:
+                print(f"Erreur : Impossible de charger la carte '{default_map}'")
+                pygame.quit()
+                sys.exit(1)
+        
         self.wallpaper = pygame.image.load('graphics/wallpaper.png').convert()
-        self.wallpaper = pygame.transform.scale(
-            self.wallpaper,
-            (self.width, self.height))
+        self.wallpaper = pygame.transform.scale(self.wallpaper, (self.width, self.height))
         self.wallpaper_menu = pygame.image.load('graphics/wallpaper_menu.png').convert()
-        self.wallpaper_menu = pygame.transform.scale(
-            self.wallpaper_menu,
-            (self.width, self.height))
+        self.wallpaper_menu = pygame.transform.scale(self.wallpaper_menu, (self.width, self.height))
         self.drone_sprite = pygame.image.load('graphics/drone.png').convert_alpha()
         self.drone_sprite = pygame.transform.scale(self.drone_sprite, (111, 111))
         self.stats_font = pygame.font.Font('graphics/Kids_Word.otf', 20)
+        
         self.running = True
         self.drone_visual_positions = {}
         
     def run(self) -> None:
+        """Starts the main Pygame execution loop."""
         clock = pygame.time.Clock()
         last_step_time = pygame.time.get_ticks()
         step_interval = 400
-        self.game_started = False
-        self.game_keyboard = None
-        self.turn = 0
+        
         while self.running:
             now = pygame.time.get_ticks()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
+                    
                 if self.state == 'GAME':
                     if event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_SPACE:
-                            if self.game_started == False:
-                                self.game_started = True
-                            else:
-                                self.game_started = False
+                            self.simulator.toggle_auto_mode()
                             last_step_time = pygame.time.get_ticks()
-                        elif event.key == pygame.K_RIGHT and not self.game_started:
-                            self.graph.step()
-                            if not self.graph.is_finished():
-                                self.turn += 1
-                            last_step_time = now
-                        elif event.key == pygame.K_LEFT and not self.game_started:
-                            self.state = 'MENU'
+                        elif event.key == pygame.K_RIGHT and not self.simulator.game_started:
+                            self.simulator.step()
+                            last_step_time = now 
                         elif event.key == pygame.K_ESCAPE:
                             self.state = 'MENU'
-                            self.game_started = False
+                            self.simulator.game_started = False
                             self.menu.chosen_map = None
-                if self.state == 'MENU':
+                        elif event.key == pygame.K_LEFT and not self.simulator.game_started:
+                            self.simulator.load_map(self.menu.chosen_map)
+                            last_step_time = pygame.time.get_ticks()
+                            
+                elif self.state == 'MENU':
                     self.menu.handle_event(event)
                     if self.menu.chosen_map:
-                        try:
-                            parser = MapParser(self.menu.chosen_map)
-                            settings = parser.parse()
-                            self.graph = Graph.from_settings(settings, parser.nb_drones)
-                            start = self.graph.get_start_area()
-                            end = self.graph.get_end_area()
-                            pathfinder = Pathfinder()
-                            for drone in self.graph.drones:
-                                try:
-                                    path, timetable = pathfinder.find_path(self.graph, start, end)
-                                except:
-                                    raise ParseError("No path finded")
-                                drone.path = path[1:]
-                                drone.timetable = timetable
-                            self.state = 'GAME'    
-                        except ParseError as e:
-                            print(e)
+                        success = self.simulator.load_map(self.menu.chosen_map)
+                        if success:
+                            self.state = 'GAME'
+                        else:
                             self.running = False
-            if self.state == 'GAME':
-                if self.game_started:
-                    if now - last_step_time >= step_interval:
-                        self.graph.step()
-                        last_step_time = now
-                        self.turn += 1
-                        if self.graph.is_finished():
-                            self.game_started = False
-                    else:
-                        pass
+
+            if self.state == 'GAME' and self.simulator.game_started:
+                if now - last_step_time >= step_interval:
+                    self.simulator.step()
+                    last_step_time = now
+                    if self.simulator.is_finished():
+                        self.simulator.game_started = False
+
             if self.state == 'MENU':
                 self.screen.blit(self.wallpaper_menu, (0, 0))
                 self.menu.draw()
             elif self.state == 'GAME':
                 self.screen.blit(self.wallpaper, (0, 0))
-                text_turn = self.menu.font.render(f"Turn : {self.graph.turn}", True, (255, 255, 255))
+                
+                text_turn = self.menu.font.render(f"Turn : {self.simulator.graph.turn}", True, (255, 255, 255))
                 self.screen.blit(text_turn, (1550, 30))
-                if self.game_started:
-                    state = 'Auto'
-                else:
-                    state = 'Manual'
-                text = self.menu.font.render(f"Mode : {state}", True, (255, 255, 255))
-                self.screen.blit(text, (700, 30))
+                
+                state_text = 'Auto' if self.simulator.game_started else 'Manual'
+                text_mode = self.menu.font.render(f"Mode : {state_text}", True, (255, 255, 255))
+                self.screen.blit(text_mode, (700, 30))
+                
                 self.draw_connections()
                 self.draw_areas()
                 self.draw_drones()
+                
             pygame.display.flip()
             clock.tick(60)
         pygame.quit()
 
     def draw_areas(self) -> None:
+        """Renders map nodes/hubs along with their occupancy ratios."""
         offset_x, offset_y = self.get_offset()
-        for area in self.graph.areas.values():
+        graph = self.simulator.graph
+        for area in graph.areas.values():
             x = area.pos[0] * 75 + offset_x
             y = area.pos[1] * 120 + offset_y
             if area.color == 'none':
-                if area.role == 'start_hub':
-                    draw_color = Color.GREEN
-                elif area.role == 'end_hub':
-                    draw_color = Color.RED
-                else:
-                    draw_color = Color.WHITE
+                draw_color = Color.GREEN if area.role == 'start_hub' else (Color.RED if area.role == 'end_hub' else Color.WHITE)
             else:
                 draw_color = Color[area.color]  
+                
             if area.color == 'RAINBOW':
                 pygame.draw.circle(self.screen, Color.PURPLE.value, (x, y), 30)
                 pygame.draw.circle(self.screen, Color.BLUE.value, (x, y), 26)
@@ -182,15 +175,13 @@ class Renderer:
                 pygame.draw.circle(self.screen, Color.LIME.value, (x, y), 18)
                 pygame.draw.circle(self.screen, Color.YELLOW.value, (x, y), 14)
                 pygame.draw.circle(self.screen, Color.ORANGE.value, (x, y), 10)
-                
             else:
                 pygame.draw.circle(self.screen, draw_color.value, (x, y), 30)
                 pygame.draw.circle(self.screen, Color.WHITE.value, (x, y), 23)
-            nb_drones = sum(1 for drone in self.graph.drones if drone.current_area == area and drone.current_connection is None)
-            if area.role == 'hub':
-                cap_text = f'{nb_drones}/{area.max_drones}'
-            else:
-                cap_text = f'{nb_drones}/{len(self.graph.drones)}'
+                
+            nb_drones = sum(1 for drone in graph.drones if drone.current_area == area and drone.current_connection is None)
+            cap_text = f'{nb_drones}/{area.max_drones}' if area.role == 'hub' else f'{nb_drones}/{len(graph.drones)}'
+            
             text_surface = self.stats_font.render(cap_text, True, (0, 0, 0))
             text_rect = text_surface.get_rect(center=(x, y + 50))
             fond_rect = text_rect.inflate(8, 4)
@@ -198,8 +189,9 @@ class Renderer:
             self.screen.blit(text_surface, text_rect)
         
     def draw_connections(self) -> None:
+        """Draws network connection links bridging graph nodes together."""
         offset_x, offset_y = self.get_offset()
-        for connection in self.graph.connections:
+        for connection in self.simulator.graph.connections:
             x1, y1 = connection.area1.pos
             x2, y2 = connection.area2.pos
             pygame.draw.line(
@@ -211,13 +203,11 @@ class Renderer:
             )
             
     def draw_drones(self) -> None:
+        """Updates and draws drones using localized linear interpolation for smooth motion."""
         offset_x, offset_y = self.get_offset()
-        for drone in self.graph.drones:
+        for drone in self.simulator.graph.drones:
             if drone.current_connection:
-                if drone.current_connection.area1 == drone.target_area:
-                    start_area = drone.current_connection.area2
-                else:
-                    start_area = drone.current_connection.area1
+                start_area = drone.current_connection.area2 if drone.current_connection.area1 == drone.target_area else drone.current_connection.area1
                 total_cost = drone.current_connection.cost_to(drone.target_area)
                 progress = drone.travel_progress / total_cost if total_cost > 0 else 1.0
                 raw_x = start_area.pos[0] + (drone.target_area.pos[0] - start_area.pos[0]) * progress
@@ -225,8 +215,10 @@ class Renderer:
             else:
                 current_area = drone.current_area if drone.current_area else drone.final_destination
                 raw_x, raw_y = current_area.pos if current_area else (0, 0)
+                
             target_x = raw_x * 75 + offset_x
             target_y = raw_y * 120 + offset_y
+            
             if drone not in self.drone_visual_positions:
                 self.drone_visual_positions[drone] = [target_x, target_y]
             current_vis_x, current_vis_y = self.drone_visual_positions[drone]
@@ -234,12 +226,14 @@ class Renderer:
             new_vis_x = current_vis_x + (target_x - current_vis_x) * speed
             new_vis_y = current_vis_y + (target_y - current_vis_y) * speed
             self.drone_visual_positions[drone] = [new_vis_x, new_vis_y]
+            
             rect = self.drone_sprite.get_rect(center=(int(new_vis_x), int(new_vis_y)))
             self.screen.blit(self.drone_sprite, rect)
             
     def get_offset(self) -> tuple[int, int]:
-        positions_x = [area.pos[0] for area in self.graph.areas.values()]
-        positions_y = [area.pos[1] for area in self.graph.areas.values()]
+        """Calculates centering offsets based on extreme map coordinates to bound graphics onto the screen canvas."""
+        positions_x = [area.pos[0] for area in self.simulator.graph.areas.values()]
+        positions_y = [area.pos[1] for area in self.simulator.graph.areas.values()]
 
         min_x, max_x = min(positions_x), max(positions_x)
         min_y, max_y = min(positions_y), max(positions_y)

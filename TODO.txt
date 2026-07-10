@@ -1,5 +1,4 @@
-- Makefile a peaufiner
+- Print in terminal
 - README
-- Clean Project
-- Docstring
+- Clean Project *
 - Testing

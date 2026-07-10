@@ -2,12 +2,14 @@ from enum import Enum
 from parsing import MapSetting
 
 class AreaType(Enum):
+    """Enum representing the different types of zones impacting movement costs."""
     NORMAL = "normal"
     RESTRICTED = "restricted"
     BLOCKED = "blocked"
     PRIORITY = "priority"
     
 class Color(Enum):
+    """Enum representing RGB color values for graphical display."""
     WHITE = (240, 240, 240)
     BLUE = (50, 150, 220)
     YELLOW = (240, 200, 60)
@@ -29,6 +31,9 @@ class Color(Enum):
 
 
 class Area:
+    """
+    Represents a node (zone/hub) within the drone navigation graph.
+    """
     def __init__(self,
                  area_id: str, 
                  pos: tuple[int, int], 
@@ -36,6 +41,7 @@ class Area:
                  area_type: AreaType = AreaType.NORMAL,
                  color: str = "none",
                  max_drones: int = 1) -> None:
+        """Initialize a new area with its constraints and properties."""
         self.area_id = area_id
         self.pos = pos
         self.area_type = area_type
@@ -49,31 +55,41 @@ class Area:
     
     @property
     def movement_cost(self) -> int:
+        """Return the travel cost to enter this area (2 if restricted, 1 otherwise)."""
         if self.area_type == AreaType.RESTRICTED:
             return 2
         return 1
 
     @property
     def is_blocked(self) -> bool:
+        """Check if the area is blocked for navigation."""
         return self.area_type == AreaType.BLOCKED
     
     @property
     def is_priority(self) -> bool:
+        """Check if the area is classified as a priority zone."""
         return self.area_type == AreaType.PRIORITY
     
     @property
     def is_restricted(self) -> bool:
+        """Check if the area has restricted access (higher movement cost)."""
         return self.area_type == AreaType.RESTRICTED
     
     @property
     def is_end(self):
+        """Check if the area is the final destination hub."""
         return self.role == "end_hub"
 
+
 class Drone:
+    """
+    Represents a drone that navigates from a start area to an end area.
+    """
     def __init__(self,
                  drone_id: int,
                  start: Area,
                  end: Area) -> None:
+        """Initialize a drone with its start point, destination, and flight state."""
         self.drone_id = drone_id
         self.current_area = start
         self.end = end
@@ -86,10 +102,14 @@ class Drone:
             
 
 class Connection:
+    """
+    Represents a bidirectional link between two areas.
+    """
     def __init__(self,
                  area1: Area,
                  area2: Area,
                  max_drones: int = 1) -> None:
+        """Initialize a connection between two areas with a maximum drone capacity."""
         self.area1 = area1
         self.area2 = area2
         self.max_drones = max_drones
@@ -98,15 +118,27 @@ class Connection:
         self.reserved: dict[int, int] = {}
         
     def get_dest(self, area: Area) -> Area:
+        """
+        Return the destination area opposite to the provided area.
+        Returns None if the provided area is not part of this connection.
+        """
         if area == self.area1:
             return self.area2
+        elif area == self.area2:
+            return self.area1
         return None
     
     def cost_to(self, destination: Area) -> int:
+        """Return the travel cost to reach the destination via this link."""
         return destination.movement_cost
 
+
 class Graph:
+    """
+    Manages the overall infrastructure (areas, connections, drones) and time progression.
+    """
     def __init__(self) -> None:
+        """Initialize an empty graph with a trajectory manager (Pathfinder)."""
         from pathfinder import Pathfinder
         self.areas: dict[str, Area] = {}
         self.connections: list[Connection] = []
@@ -116,36 +148,50 @@ class Graph:
         self.turn = 0
         
     def add_area(self, area: Area) -> None:
+        """Add an area to the graph's area registry."""
         self.areas[area.area_id] = area
 
     def add_connection(self, connection: Connection) -> None:
+        """Add a link to the graph and register it in both connected areas."""
         self.connections.append(connection)
         connection.area1.connections.append(connection)
         connection.area2.connections.append(connection)
         
     def get_neighbors(self, area: Area) -> list[Area]:
+        """Return a list of neighbor areas directly connected to the given area."""
         return [connection.get_dest(area) for connection in area.connections]
     
     def get_start_area(self) -> Area:
+        """Find and return the area defined as the starting point ('start_hub')."""
         for area in self.areas.values():
             if area.role == 'start_hub':
                 return area
             
     def get_end_area(self) -> Area:
+        """Find and return the area defined as the final destination ('end_hub')."""
         for area in self.areas.values():
             if area.role == "end_hub":
                 return area
     
     def get_connection(self, area1: Area, area2: Area):
+        """
+        Find and return the connection existing between area1 and area2.
+        Returns None if no direct link exists.
+        """
         for connection in area1.connections:
             if connection.get_dest(area1) == area2:
                 return connection
         return None
     
     def is_finished(self) -> bool:
+        """Check if all drones have finished their route (empty path)."""
         return all(len(drone.path) == 0 for drone in self.drones)
         
     def step(self) -> None:
+        """
+        Advance the simulation by one time unit.
+        Handles drone departures based on their timetables and progress through connections.
+        """
         self.current_time += 1
         if not self.is_finished():
             self.turn += 1
@@ -172,10 +218,12 @@ class Graph:
                     if drone.current_area == drone.end:
                         drone.is_arrived = True
         
-            
-                        
     @classmethod
     def from_settings(cls, settings: MapSetting, nb_drones: int) -> 'Graph':
+        """
+        Factory method: Instantiate and configure a complete Graph
+        from a MapSetting configuration object and a given number of drones.
+        """
         graph = cls()
         for hubs in settings.HUBS:
             area = Area(

@@ -7,7 +7,11 @@ install:
 	pip install -r requirements.txt
 
 run:
-	$(PYTHON) $(MAIN_SCRIPT)
+	@if [ "$(filter-out run,$(MAKECMDGOALS))" != "" ]; then \
+		echo "[ERROR] - Use 'make run ARGS=<file.txt>'"; \
+		exit 1; \
+	fi
+	$(PYTHON) $(MAIN_SCRIPT) $(ARGS)
 
 debug:
 	$(PYTHON) -m pdb $(MAIN_SCRIPT)
@@ -20,9 +24,7 @@ clean:
 	find . -type f -name "*.pyc" -delete
 
 lint:
-	flake8 .
-	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	flake8; mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	flake8 .
-	mypy . --strict
+	flake8; mypy . --strict
