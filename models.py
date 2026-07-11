@@ -66,16 +66,6 @@ class Area:
         return self.area_type == AreaType.BLOCKED
     
     @property
-    def is_priority(self) -> bool:
-        """Check if the area is classified as a priority zone."""
-        return self.area_type == AreaType.PRIORITY
-    
-    @property
-    def is_restricted(self) -> bool:
-        """Check if the area has restricted access (higher movement cost)."""
-        return self.area_type == AreaType.RESTRICTED
-    
-    @property
     def is_end(self):
         """Check if the area is the final destination hub."""
         return self.role == "end_hub"
@@ -156,10 +146,7 @@ class Graph:
         self.connections.append(connection)
         connection.area1.connections.append(connection)
         connection.area2.connections.append(connection)
-        
-    def get_neighbors(self, area: Area) -> list[Area]:
-        """Return a list of neighbor areas directly connected to the given area."""
-        return [connection.get_dest(area) for connection in area.connections]
+    
     
     def get_start_area(self) -> Area:
         """Find and return the area defined as the starting point ('start_hub')."""

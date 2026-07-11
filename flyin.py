@@ -3,17 +3,28 @@ import sys
    
 
 if __name__ == "__main__":
-	chosen_map = None
+	try:
+		chosen_map = None
+		flag = None
+		args = sys.argv[1:]
 
-	if len(sys.argv) > 2:
-		print("[ERROR] -> Usage: python flyin.py <file.txt>")
-		sys.exit(1)
-
-	if len(sys.argv) == 2:
-		if not sys.argv[1].endswith(".txt"):
-			print("[ERROR] -> Usage: python flyin.py <file.txt>")
+		if len(args) > 2:
+			print("[ERROR] -> Usage: python flyin.py <file.txt> [debug]  OR  python flyin.py debug <file.txt>")
 			sys.exit(1)
-		chosen_map = sys.argv[1]
 
-	app = Renderer(default_map=chosen_map)
-	app.run()
+		for arg in args:
+			if arg == "debug":
+				flag = "debug"
+			elif arg.endswith(".txt"):
+				chosen_map = arg
+			else:
+				print(f"[ERROR] -> Argument unkown: '{arg}'")
+				print("[ERROR] -> Usage: python flyin.py <file.txt> [debug]")
+				sys.exit(1)
+
+		app = Renderer(default_map=chosen_map)
+		app.simulator.flag = flag
+		app.run()
+  
+	except KeyboardInterrupt:
+		sys.exit(1)

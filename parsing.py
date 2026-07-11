@@ -120,7 +120,6 @@ class MapParser:
         self.filename = filename
         self.areas: list[AreaSetting] = []
         self.connections: list[ConnectSetting] = []
-        self.nb_drones: int = 0
         self.nb_drones_init = False
 
     def _create_area(self, value: str, role: str) -> AreaSetting:

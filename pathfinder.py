@@ -47,10 +47,9 @@ class Pathfinder:
                 continue
             visited.add(state)
             
-            # Explore waiting in the current area up to the predefined time horizon limits
             for departure in range(arrival + 1, arrival + 1 + self.HORIZON):
                 if not self._area_free(area, departure - 1):
-                    break  # Area is congested/blocked; waiting further is impossible
+                    break
                     
                 for connection in area.connections:
                     neighbor = connection.get_dest(area)
@@ -74,8 +73,7 @@ class Pathfinder:
                         
         if final_state is None:
             return []
-            
-        # Reconstruct space-time states backwards from destination
+        
         states = []
         state = final_state
         while state is not None:
@@ -83,8 +81,7 @@ class Pathfinder:
             record = previous.get(state)
             state = record[0] if record else None
         states.reverse()
-
-        # Build structural physical path and allocate scheduling/reservations
+        
         path = [area for area, _ in states]
         timetable = {}
         for i in range(len(states) - 1):
