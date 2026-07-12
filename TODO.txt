@@ -1,4 +1,0 @@
-- Print in terminal
-- README
-- Clean Project *
-- Testing

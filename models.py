@@ -184,8 +184,11 @@ class Graph:
         return None
 
     def is_finished(self) -> bool:
-        """Check if all drones have finished their route (empty path)."""
-        return all(len(drone.path) == 0 for drone in self.drones)
+        """Check if all drones have physically completed their route."""
+        return all(
+            len(drone.path) == 0 and drone.current_connection is None 
+            for drone in self.drones
+        )
 
     def step(self) -> None:
         """

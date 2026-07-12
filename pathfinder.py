@@ -38,6 +38,10 @@ class Pathfinder:
             list: Returns an empty list if no valid, conflict-free
             path is found within the horizon bounds.
         """
+        
+        if getattr(start, 'is_blocked', False) or getattr(end, 'is_blocked', False):
+            raise ValueError("Start or End hub is blocked.")
+        
         start_state: Tuple[Any, int] = (start, 0)
         best: Dict[Tuple[Any, int], int] = {start_state: 0}
         previous: Dict[
@@ -61,6 +65,9 @@ class Pathfinder:
             if state in visited:
                 continue
             visited.add(state)
+            
+            if arrival >= self.HORIZON:
+                continue
 
             for departure in range(arrival + 1, arrival + 1 + self.HORIZON):
                 if not self._area_free(area, departure - 1):
@@ -89,9 +96,7 @@ class Pathfinder:
                         heapq.heappush(queue, (n_arrival, counter, n_state))
 
         if final_state is None:
-            # Pour satisfaire mypy sur le type de retour, on renvoie un
-            # tuple vide converti ou des structures vides conformes.
-            return [], {}
+            raise ValueError()
 
         states: List[Tuple[Any, int]] = []
         state_cursor: Tuple[Any, int] | None = final_state
