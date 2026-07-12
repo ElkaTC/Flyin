@@ -186,7 +186,7 @@ class Graph:
     def is_finished(self) -> bool:
         """Check if all drones have physically completed their route."""
         return all(
-            len(drone.path) == 0 and drone.current_connection is None 
+            len(drone.path) == 0 and drone.current_connection is None
             for drone in self.drones
         )
 

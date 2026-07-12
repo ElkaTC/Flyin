@@ -1,6 +1,6 @@
 import os
 from pydantic import BaseModel, Field, ValidationError, model_validator
-from typing import Dict, List, Literal, Optional, Set, Tuple, cast
+from typing import Dict, List, Literal, Optional, Set, Tuple, cast, Any
 
 
 class ParseError(Exception):
@@ -144,44 +144,62 @@ class MapParser:
         self.nb_drones: int = 0
 
     def _create_area(
-        self, value: str, role: Literal['start_hub', 'hub', 'end_hub'], line_number: int
+        self,
+        value: str,
+        role: Literal['start_hub', 'hub', 'end_hub'],
+        line_number: int
     ) -> AreaSetting:
         from models import Color
         """
         Parses a textual line representing a hub definition.
         """
-        if ('[' in value or ']' in value) and (value.count('[') != 1 or value.count(']') != 1 or value.index('[') > value.index(']')):
+        if (
+            ('[' in value or ']' in value)
+            and (value.count('[') != 1 or value.count(']') != 1
+                 or value.find('[') > value.find(']'))
+        ):
+            raise ParseError(f"Line {line_number}: Invalid brackets structure")
             raise ParseError(f"Line {line_number}: Invalid brackets structure")
 
         if '[' in value and ']' in value:
             if not value.strip().endswith(']'):
-                raise ParseError(f"Line {line_number}: Unexpected text found after the closing bracket")
+                raise ParseError(
+                    f"Line {line_number}: "
+                    "Unexpected text found after the closing bracket"
+                    )
 
             mandatory, optional_str = value.split('[', 1)
             parts = mandatory.split()
             if len(parts) < 3:
-                raise ParseError(f"Line {line_number}: Missing mandatory hub fields (name, x, y)")
-                
+                raise ParseError(
+                    f"Line {line_number}: "
+                    "Missing mandatory hub fields (name, x, y)"
+                    )
             name, x, y = parts[0], parts[1], parts[2]
             area = AreaSetting(
                 NAME=name,
                 ROLE=role,
                 POS=(int(x), int(y))
             )
-            
+
             optional_str = optional_str.strip().rstrip(']')
             clean_optional = optional_str.split()
             options: List[Tuple[str, str]] = []
-            
+
             for item in clean_optional:
                 if '=' not in item:
-                    raise ParseError(f"Line {line_number}: Malformed option '{item}', missing '='")
+                    raise ParseError(
+                        f"Line {line_number}: "
+                        f"Malformed option '{item}', missing '='"
+                        )
                 name_opt, value_opt = item.split('=', 1)
                 options.append((name_opt.strip(), value_opt.strip()))
-                
+
             names_opt = [name_opt for name_opt, _ in options]
             if len(names_opt) != len(set(names_opt)):
-                raise ParseError(f"Line {line_number}: Optional setting must be unique")
+                raise ParseError(
+                    f"Line {line_number}: Optional setting must be unique"
+                    )
 
             for name_opt, value_opt in options:
                 if name_opt == 'color':
@@ -189,27 +207,44 @@ class MapParser:
                     if color_upper not in Color.__members__:
                         available_colors = ", ".join(Color.__members__.keys())
                         raise ParseError(
-                            f"Line {line_number}: Invalid color '{value_opt}'. "
+                            f"Line {line_number}: "
+                            f"Invalid color '{value_opt}'. "
                             f"Supported colors are: {available_colors}"
                         )
                     area.COLOR = color_upper
                 elif name_opt == 'zone':
-                    if value_opt in ("normal", "blocked", "restricted", "priority"):
-                        area.TYPE = cast(Literal["normal", "blocked", "restricted", "priority"], value_opt)
+                    if value_opt in (
+                        "normal", "blocked", "restricted", "priority"
+                    ):
+                        area.TYPE = cast(
+                            Literal[
+                                "normal", "blocked", "restricted", "priority"
+                                ], value_opt
+                            )
                     else:
-                        raise ParseError(f"Line {line_number}: Invalid zone type '{value_opt}'")
+                        raise ParseError(f"Line {line_number}: "
+                                         f"Invalid zone type '{value_opt}'")
                 elif name_opt == 'max_drones':
                     val_int = int(value_opt)
                     if val_int <= 0:
-                        raise ParseError(f"Line {line_number}: Invalid max_drones value '{value_opt}'. Must be > 0.")
+                        raise ParseError(
+                            f"Line {line_number}: "
+                            f"Invalid max_drones value '{value_opt}'. "
+                            "Must be > 0."
+                            )
                     area.MAX_DRONE = val_int
                 else:
-                    raise ParseError(f"Line {line_number}: Unknown area option '{name_opt}'")
+                    raise ParseError(
+                        f"Line {line_number}: Unknown area option '{name_opt}'"
+                        )
             return area
 
         parts_simple = value.split()
         if len(parts_simple) < 3:
-            raise ParseError(f"Line {line_number}: Missing mandatory hub fields (name, x, y)")
+            raise ParseError(
+                f"Line {line_number}: "
+                "Missing mandatory hub fields (name, x, y)"
+                )
         name_s, x_s, y_s = parts_simple[0], parts_simple[1], parts_simple[2]
         return AreaSetting(
             NAME=name_s,
@@ -221,33 +256,52 @@ class MapParser:
         """
         Parses a textual line representing a network connection.
         """
-        if ('[' in value or ']' in value) and (value.count('[') != 1 or value.count(']') != 1 or value.index('[') > value.index(']')):
+        if (
+            ('[' in value or ']' in value)
+            and (value.count('[') != 1 or value.count(']') != 1
+                 or value.index('[') > value.index(']'))
+        ):
             raise ParseError(f"Line {line_number}: Invalid brackets structure")
 
         if '[' in value and ']' in value:
             if not value.strip().endswith(']'):
-                raise ParseError(f"Line {line_number}: Unexpected text found after the closing bracket")
+                raise ParseError(
+                    f"Line {line_number}: "
+                    "Unexpected text found after the closing bracket"
+                    )
 
             mandatory, optional = value.split('[', 1)
             if '-' not in mandatory:
-                raise ParseError(f"Line {line_number}: Missing '-' splitter in connection")
+                raise ParseError(
+                    f"Line {line_number}: "
+                    "Missing '-' splitter in connection"
+                    )
             area1, area2 = mandatory.split('-', 1)
             connect = ConnectSetting(
                 SOURCE=area1.strip(),
                 TARGET=area2.strip()
             )
-            
+
             optional = optional.strip().rstrip(']')
             if '=' not in optional:
-                raise ParseError(f"Line {line_number}: Malformed option '{optional}', missing '='")
+                raise ParseError(
+                    f"Line {line_number}: "
+                    f"Malformed option '{optional}', missing '='"
+                    )
             name_opt, value_opt = optional.split('=', 1)
             if name_opt.strip() != 'max_link_capacity':
-                raise ParseError(f"Line {line_number}: Unknown connection option '{name_opt}'")
+                raise ParseError(
+                    f"Line {line_number}: "
+                    "Unknown connection option '{name_opt}'"
+                    )
             connect.MAX_LINK = int(value_opt)
             return connect
 
         if '-' not in value:
-            raise ParseError(f"Line {line_number}: Missing '-' splitter in connection")
+            raise ParseError(
+                f"Line {line_number}: "
+                "Missing '-' splitter in connection"
+                )
         area1, area2 = value.split('-', 1)
         return ConnectSetting(
             SOURCE=area1.strip(),
@@ -256,7 +310,8 @@ class MapParser:
 
     def parse(self) -> MapSetting:
         """
-        Reads, deserializes, and verifies raw configurations from the text file.
+        Reads, deserializes, and verifies raw
+        configurations from the text file.
         """
         try:
             if not os.path.exists(self.filename):
@@ -268,28 +323,41 @@ class MapParser:
                     if not line or line.startswith('#'):
                         continue
                     if ':' not in line:
-                        raise ParseError(f"Line {line_number}: Missing ':' separator")
+                        raise ParseError(
+                            f"Line {line_number}: "
+                            "Missing ':' separator"
+                            )
 
                     data_type, value = line.split(':', 1)
                     data_type = data_type.strip()
                     value = value.strip()
 
                     if not self.nb_drones_init and data_type != 'nb_drones':
-                        raise ParseError(f"Line {line_number}: 'nb_drones' must be defined on the first active line")
+                        raise ParseError(
+                            f"Line {line_number}: "
+                            "'nb_drones' must be defined "
+                            "on the first active line"
+                            )
 
                     if data_type == 'nb_drones':
                         if self.nb_drones_init:
-                            raise ParseError(f"Line {line_number}: 'nb_drones' is already defined")
+                            raise ParseError(
+                                f"Line {line_number}: "
+                                "'nb_drones' is already defined"
+                                )
                         try:
                             val = int(value)
                             if val <= 0:
                                 raise ValueError()
                         except ValueError:
-                            raise ParseError(f"Line {line_number}: 'nb_drones' must be an integer greater than 0")
+                            raise ParseError(
+                                f"Line {line_number}: "
+                                "'nb_drones' must be an integer greater than 0"
+                                )
                         self.nb_drones = int(value)
                         self.nb_drones_init = True
                     elif data_type in ('start_hub', 'hub', 'end_hub'):
-                        role_literal: Literal['start_hub', 'hub', 'end_hub'] = data_type  # type: ignore[assignment]
+                        role_literal: Any = data_type
                         self.areas.append(
                             self._create_area(value, role_literal, line_number)
                         )
@@ -297,17 +365,29 @@ class MapParser:
                         connect = self._create_connect(value, line_number)
                         existing_hubs = {area.NAME for area in self.areas}
                         if connect.SOURCE not in existing_hubs:
-                            raise ParseError(f"Line {line_number}: Unknown source hub '{connect.SOURCE}'")
+                            raise ParseError(
+                                f"Line {line_number}: "
+                                f"Unknown source hub '{connect.SOURCE}'"
+                                )
                         if connect.TARGET not in existing_hubs:
-                            raise ParseError(f"Line {line_number}: Unknown target hub '{connect.TARGET}'")
+                            raise ParseError(
+                                f"Line {line_number}: "
+                                f"Unknown target hub '{connect.TARGET}'")
                         self.connections.append(connect)
                     else:
-                        raise ParseError(f"Line {line_number}: Unknown field header '{data_type}'")
+                        raise ParseError(
+                            f"Line {line_number}: "
+                            f"Unknown field header '{data_type}'"
+                            )
 
             if len(self.areas) < 2:
-                raise ParseError("Map structural error: Must contain at least 2 hubs")
+                raise ParseError(
+                    "Map structural error: Must contain at least 2 hubs"
+                    )
             if not self.connections:
-                raise ParseError("Map structural error: Must contain at least 1 connection")
+                raise ParseError(
+                    "Map structural error: Must contain at least 1 connection"
+                    )
 
             return MapSetting(
                 NB_DRONE=self.nb_drones,

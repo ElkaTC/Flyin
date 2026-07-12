@@ -38,10 +38,13 @@ class Pathfinder:
             list: Returns an empty list if no valid, conflict-free
             path is found within the horizon bounds.
         """
-        
-        if getattr(start, 'is_blocked', False) or getattr(end, 'is_blocked', False):
+
+        if (
+            getattr(start, 'is_blocked', False)
+            or getattr(end, 'is_blocked', False)
+        ):
             raise ValueError("Start or End hub is blocked.")
-        
+
         start_state: Tuple[Any, int] = (start, 0)
         best: Dict[Tuple[Any, int], int] = {start_state: 0}
         previous: Dict[
@@ -65,7 +68,7 @@ class Pathfinder:
             if state in visited:
                 continue
             visited.add(state)
-            
+
             if arrival >= self.HORIZON:
                 continue
 
